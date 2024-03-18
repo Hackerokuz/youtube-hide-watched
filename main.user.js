@@ -24,7 +24,15 @@
 
 (function (_undefined) {
 	// Enable for debugging
+
 	const DEBUG = false;
+
+	const LOCALSTORAGE_WATCHED_VIDEOS_KEY = 'YTHWV_WATCHED_VIDEOS';
+
+	const EYE_ICON =
+		'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 48 48"><path fill="currentColor" d="M24 9C14 9 5.46 15.22 2 24c3.46 8.78 12 15 22 15 10.01 0 18.54-6.22 22-15-3.46-8.78-11.99-15-22-15zm0 25c-5.52 0-10-4.48-10-10s4.48-10 10-10 10 4.48 10 10-4.48 10-10 10zm0-16c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6z"/></svg>';
+	const EYE_ICON_HIDDEN =
+		'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 48 48"><path fill="currentColor" d="M24 14c5.52 0 10 4.48 10 10 0 1.29-.26 2.52-.71 3.65l5.85 5.85c3.02-2.52 5.4-5.78 6.87-9.5-3.47-8.78-12-15-22.01-15-2.8 0-5.48.5-7.97 1.4l4.32 4.31c1.13-.44 2.36-.71 3.65-.71zM4 8.55l4.56 4.56.91.91C6.17 16.6 3.56 20.03 2 24c3.46 8.78 12 15 22 15 3.1 0 6.06-.6 8.77-1.69l.85.85L39.45 44 42 41.46 6.55 6 4 8.55zM15.06 19.6l3.09 3.09c-.09.43-.15.86-.15 1.31 0 3.31 2.69 6 6 6 .45 0 .88-.06 1.3-.15l3.09 3.09C27.06 33.6 25.58 34 24 34c-5.52 0-10-4.48-10-10 0-1.58.4-3.06 1.06-4.4zm8.61-1.57 6.3 6.3L30 24c0-3.31-2.69-6-6-6l-.33.03z"/></svg>';
 
 	// GM_config setup
 	const title = document.createElement('a');
@@ -33,13 +41,13 @@
 	title.target = '_blank';
 	const gmc = new GM_config({
 		events: {
-			save () {
+			save() {
 				this.close();
 			},
 		},
 		fields: {
 			HIDDEN_THRESHOLD_PERCENT: {
-				default: 10,
+				default: 90,
 				label: 'Hide/Dim Videos Above Percent',
 				max: 100,
 				min: 0,
@@ -133,29 +141,126 @@
 .YT-HWV-MENUBUTTON-ON span { transform: rotate(180deg) }
 `);
 
-	const BUTTONS = [{
-		/* eslint-disable max-len */
-		icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 48 48"><path fill="currentColor" d="M24 9C14 9 5.46 15.22 2 24c3.46 8.78 12 15 22 15 10.01 0 18.54-6.22 22-15-3.46-8.78-11.99-15-22-15zm0 25c-5.52 0-10-4.48-10-10s4.48-10 10-10 10 4.48 10 10-4.48 10-10 10zm0-16c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6z"/></svg>',
-		iconHidden: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 48 48"><path fill="currentColor" d="M24 14c5.52 0 10 4.48 10 10 0 1.29-.26 2.52-.71 3.65l5.85 5.85c3.02-2.52 5.4-5.78 6.87-9.5-3.47-8.78-12-15-22.01-15-2.8 0-5.48.5-7.97 1.4l4.32 4.31c1.13-.44 2.36-.71 3.65-.71zM4 8.55l4.56 4.56.91.91C6.17 16.6 3.56 20.03 2 24c3.46 8.78 12 15 22 15 3.1 0 6.06-.6 8.77-1.69l.85.85L39.45 44 42 41.46 6.55 6 4 8.55zM15.06 19.6l3.09 3.09c-.09.43-.15.86-.15 1.31 0 3.31 2.69 6 6 6 .45 0 .88-.06 1.3-.15l3.09 3.09C27.06 33.6 25.58 34 24 34c-5.52 0-10-4.48-10-10 0-1.58.4-3.06 1.06-4.4zm8.61-1.57 6.3 6.3L30 24c0-3.31-2.69-6-6-6l-.33.03z"/></svg>',
-		/* eslint-enable max-len */
-		name: 'Toggle Watched Videos',
-		stateKey: 'YTHWV_STATE',
-		type: 'toggle',
-	}, {
-		/* eslint-disable max-len */
-		icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 48 48"><path fill="currentColor" d="M31.95 3c-1.11 0-2.25.3-3.27.93l-15.93 9.45C10.32 14.79 8.88 17.67 9 20.7c.15 3 1.74 5.61 4.17 6.84.06.03 2.25 1.05 2.25 1.05l-2.7 1.59c-3.42 2.04-4.74 6.81-2.94 10.65C11.07 43.47 13.5 45 16.05 45c1.11 0 2.22-.3 3.27-.93l15.93-9.45c2.4-1.44 3.87-4.29 3.72-7.35-.12-2.97-1.74-5.61-4.17-6.81-.06-.03-2.25-1.05-2.25-1.05l2.7-1.59c3.42-2.04 4.74-6.81 2.91-10.65C36.93 4.53 34.47 3 31.95 3z"/></svg>',
-		iconHidden: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 48 48"><g fill="currentColor"><g clip-path="url(#slashGap)"><path d="M31.97 3c-1.11 0-2.25.3-3.27.93l-15.93 9.45c-2.43 1.41-3.87 4.29-3.75 7.32.15 3 1.74 5.61 4.17 6.84.06.03 2.25 1.05 2.25 1.05l-2.7 1.59C9.32 32.22 8 36.99 9.8 40.83c1.29 2.64 3.72 4.17 6.27 4.17 1.11 0 2.22-.3 3.27-.93l15.93-9.45c2.4-1.44 3.87-4.29 3.72-7.35-.12-2.97-1.74-5.61-4.17-6.81-.06-.03-2.25-1.05-2.25-1.05l2.7-1.59c3.42-2.04 4.74-6.81 2.91-10.65C36.95 4.53 34.49 3 31.97 3z"/></g><path d="m7.501 5.55 4.066-2.42 24.26 40.78-4.065 2.418z"/></g></svg>',
-		/* eslint-enable max-len */
-		name: 'Toggle Shorts',
-		stateKey: 'YTHWV_STATE_SHORTS',
-		type: 'toggle',
-	}, {
-		/* eslint-disable max-len */
-		icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path fill="currentColor" d="M12 9.5a2.5 2.5 0 0 1 0 5 2.5 2.5 0 0 1 0-5m0-1c-1.93 0-3.5 1.57-3.5 3.5s1.57 3.5 3.5 3.5 3.5-1.57 3.5-3.5-1.57-3.5-3.5-3.5zM13.22 3l.55 2.2.13.51.5.18c.61.23 1.19.56 1.72.98l.4.32.5-.14 2.17-.62 1.22 2.11-1.63 1.59-.37.36.08.51c.05.32.08.64.08.98s-.03.66-.08.98l-.08.51.37.36 1.63 1.59-1.22 2.11-2.17-.62-.5-.14-.4.32c-.53.43-1.11.76-1.72.98l-.5.18-.13.51-.55 2.24h-2.44l-.55-2.2-.13-.51-.5-.18c-.6-.23-1.18-.56-1.72-.99l-.4-.32-.5.14-2.17.62-1.21-2.12 1.63-1.59.37-.36-.08-.51c-.05-.32-.08-.65-.08-.98s.03-.66.08-.98l.08-.51-.37-.36L3.6 8.56l1.22-2.11 2.17.62.5.14.4-.32c.53-.44 1.11-.77 1.72-.99l.5-.18.13-.51.54-2.21h2.44M14 2h-4l-.74 2.96c-.73.27-1.4.66-2 1.14l-2.92-.83-2 3.46 2.19 2.13c-.06.37-.09.75-.09 1.14s.03.77.09 1.14l-2.19 2.13 2 3.46 2.92-.83c.6.48 1.27.87 2 1.14L10 22h4l.74-2.96c.73-.27 1.4-.66 2-1.14l2.92.83 2-3.46-2.19-2.13c.06-.37.09-.75.09-1.14s-.03-.77-.09-1.14l2.19-2.13-2-3.46-2.92.83c-.6-.48-1.27-.87-2-1.14L14 2z"/></svg>',
-		/* eslint-enable max-len */
-		name: 'Settings',
-		type: 'settings',
-	}];
+	const BUTTONS = [
+		{
+			/* eslint-disable max-len */
+			icon: EYE_ICON,
+			iconHidden: EYE_ICON_HIDDEN,
+			/* eslint-enable max-len */
+			name: 'Toggle Watched Videos',
+			stateKey: 'YTHWV_STATE',
+			type: 'toggle',
+		},
+		{
+			/* eslint-disable max-len */
+			icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 48 48"><path fill="currentColor" d="M31.95 3c-1.11 0-2.25.3-3.27.93l-15.93 9.45C10.32 14.79 8.88 17.67 9 20.7c.15 3 1.74 5.61 4.17 6.84.06.03 2.25 1.05 2.25 1.05l-2.7 1.59c-3.42 2.04-4.74 6.81-2.94 10.65C11.07 43.47 13.5 45 16.05 45c1.11 0 2.22-.3 3.27-.93l15.93-9.45c2.4-1.44 3.87-4.29 3.72-7.35-.12-2.97-1.74-5.61-4.17-6.81-.06-.03-2.25-1.05-2.25-1.05l2.7-1.59c3.42-2.04 4.74-6.81 2.91-10.65C36.93 4.53 34.47 3 31.95 3z"/></svg>',
+			iconHidden:
+				'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 48 48"><g fill="currentColor"><g clip-path="url(#slashGap)"><path d="M31.97 3c-1.11 0-2.25.3-3.27.93l-15.93 9.45c-2.43 1.41-3.87 4.29-3.75 7.32.15 3 1.74 5.61 4.17 6.84.06.03 2.25 1.05 2.25 1.05l-2.7 1.59C9.32 32.22 8 36.99 9.8 40.83c1.29 2.64 3.72 4.17 6.27 4.17 1.11 0 2.22-.3 3.27-.93l15.93-9.45c2.4-1.44 3.87-4.29 3.72-7.35-.12-2.97-1.74-5.61-4.17-6.81-.06-.03-2.25-1.05-2.25-1.05l2.7-1.59c3.42-2.04 4.74-6.81 2.91-10.65C36.95 4.53 34.49 3 31.97 3z"/></g><path d="m7.501 5.55 4.066-2.42 24.26 40.78-4.065 2.418z"/></g></svg>',
+			/* eslint-enable max-len */
+			name: 'Toggle Shorts',
+			stateKey: 'YTHWV_STATE_SHORTS',
+			type: 'toggle',
+		},
+		{
+			/* eslint-disable max-len */
+			icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path fill="currentColor" d="M12 9.5a2.5 2.5 0 0 1 0 5 2.5 2.5 0 0 1 0-5m0-1c-1.93 0-3.5 1.57-3.5 3.5s1.57 3.5 3.5 3.5 3.5-1.57 3.5-3.5-1.57-3.5-3.5-3.5zM13.22 3l.55 2.2.13.51.5.18c.61.23 1.19.56 1.72.98l.4.32.5-.14 2.17-.62 1.22 2.11-1.63 1.59-.37.36.08.51c.05.32.08.64.08.98s-.03.66-.08.98l-.08.51.37.36 1.63 1.59-1.22 2.11-2.17-.62-.5-.14-.4.32c-.53.43-1.11.76-1.72.98l-.5.18-.13.51-.55 2.24h-2.44l-.55-2.2-.13-.51-.5-.18c-.6-.23-1.18-.56-1.72-.99l-.4-.32-.5.14-2.17.62-1.21-2.12 1.63-1.59.37-.36-.08-.51c-.05-.32-.08-.65-.08-.98s.03-.66.08-.98l.08-.51-.37-.36L3.6 8.56l1.22-2.11 2.17.62.5.14.4-.32c.53-.44 1.11-.77 1.72-.99l.5-.18.13-.51.54-2.21h2.44M14 2h-4l-.74 2.96c-.73.27-1.4.66-2 1.14l-2.92-.83-2 3.46 2.19 2.13c-.06.37-.09.75-.09 1.14s.03.77.09 1.14l-2.19 2.13 2 3.46 2.92-.83c.6.48 1.27.87 2 1.14L10 22h4l.74-2.96c.73-.27 1.4-.66 2-1.14l2.92.83 2-3.46-2.19-2.13c.06-.37.09-.75.09-1.14s-.03-.77-.09-1.14l2.19-2.13-2-3.46-2.92.83c-.6-.48-1.27-.87-2-1.14L14 2z"/></svg>',
+			/* eslint-enable max-len */
+			name: 'Settings',
+			type: 'settings',
+		},
+	];
+
+	// ===========================================================
+
+	/**
+	 * Saves watched video to localStorage.
+	 *
+	 * @param {string} videoId - The video id to be saved.
+	 * @returns {boolean} - Returns true if the data was successfully saved, false otherwise.
+	 */
+	function saveWatchedVideoToLocalStorage(videoId) {
+		try {
+			let watchedVideos = loadWatchedVideosFromLocalStorage();
+
+			if (watchedVideos === null) {
+				watchedVideos = [videoId];
+			} else if (!watchedVideos.some((val) => val === videoId)) {
+				watchedVideos.push(videoId);
+			}
+
+			// Convert data to JSON string before saving
+			const jsonData = JSON.stringify([...new Set(watchedVideos)]);
+
+			// Save data to localStorage
+			localStorage.setItem(LOCALSTORAGE_WATCHED_VIDEOS_KEY, jsonData);
+
+			return true; // Saved successfully
+		} catch (error) {
+			console.error('Error saving to localStorage:', error);
+			return false; // Failed to save
+		} finally {
+			updateClassOnWatchedItems();
+			renderButtons();
+		}
+	}
+
+	/**
+	 * Removes video from localStorage.
+	 *
+	 * @param {string} videoId - The video id to be saved.
+	 * @returns {boolean} - Returns true if the data was successfully saved, false otherwise.
+	 */
+	function removeVideoFromLocalStorage(videoId) {
+		try {
+			let watchedVideos = loadWatchedVideosFromLocalStorage();
+
+			if (watchedVideos === null) {
+				watchedVideos = [];
+			} else {
+				watchedVideos = watchedVideos.filter((val) => val !== videoId);
+			}
+
+			// Convert data to JSON string before saving
+			const jsonData = JSON.stringify(watchedVideos);
+
+			// Save data to localStorage
+			localStorage.setItem(LOCALSTORAGE_WATCHED_VIDEOS_KEY, jsonData);
+
+			return true; // Saved successfully
+		} catch (error) {
+			console.error('Error saving to localStorage:', error);
+			return false; // Failed to save
+		} finally {
+			updateClassOnWatchedItems();
+			renderButtons();
+		}
+	}
+
+	/**
+	 * Loads watched videos from localStorage.
+	 *
+	 * @returns {string[]|null} - Returns watched videos if successful, or null if the data is not found.
+	 */
+	function loadWatchedVideosFromLocalStorage() {
+		try {
+			// Retrieve data from localStorage
+			const jsonData = localStorage.getItem(
+				LOCALSTORAGE_WATCHED_VIDEOS_KEY
+			);
+
+			if (jsonData === null) {
+				return []; // Data not found
+			}
+
+			// Parse JSON string to get the original data
+			const data = JSON.parse(jsonData);
+
+			return data;
+		} catch (error) {
+			console.error('Error loading from localStorage:', error);
+			return []; // Failed to load
+		}
+	}
 
 	// ===========================================================
 
@@ -175,45 +280,131 @@
 
 	// ===========================================================
 
-	const findWatchedElements = function () {
-		const watched = document.querySelectorAll('.ytd-thumbnail-overlay-resume-playback-renderer');
+	/**
+	 * Get the element before the given element in the DOM.
+	 *
+	 * @param {HTMLElement} element - The target element.
+	 * @returns {HTMLElement|null} - The element before the target element, or null if not found.
+	 */
+	function getElementBefore(element) {
+		if (element && element.previousElementSibling) {
+			return element.previousElementSibling;
+		} else {
+			return null;
+		}
+	}
 
-		const withThreshold = Array.from(watched).filter((bar) => {
-			return bar.style.width && parseInt(bar.style.width, 10) >= gmc.get('HIDDEN_THRESHOLD_PERCENT');
-		});
+	// ===========================================================
 
-		logDebug(
-			`Found ${watched.length} watched elements ` +
-			`(${withThreshold.length} within threshold)`
-		);
+	/**
+	 * Find all watched videos
+	 * @returns {Element[]|null}
+	 */
+	function findWatchedElements() {
+		try {
+			const watchedVideoIDs = loadWatchedVideosFromLocalStorage();
 
-		return withThreshold;
-	};
+			const allVideoLinks = document.querySelectorAll(
+				'a[href].ytd-thumbnail'
+			);
+
+			const savedWatchedVideos = Array.from(allVideoLinks).filter(
+				(link) => {
+					try {
+						const videoId = link
+							.getAttribute('href')
+							.match(/[?&]v=([^&]+)/)[1];
+						let watched = false;
+
+						if (watchedVideoIDs !== null) {
+							watched = watchedVideoIDs.some(
+								(val) => videoId === val
+							);
+						}
+
+						return watched;
+					} catch (e) {
+						return false;
+					}
+				}
+			);
+
+			const watched = document.querySelectorAll(
+				'.ytd-thumbnail-overlay-resume-playback-renderer'
+			);
+
+			const withThreshold = Array.from(watched).filter((bar) => {
+				const videoId = bar.parentElement.parentElement.parentElement
+					.getAttribute('href')
+					.match(/[?&]v=([^&]+)/)[1];
+				let watched = false;
+
+				if (watchedVideoIDs !== null) {
+					watched = watchedVideoIDs.some((val) => videoId === val);
+				}
+
+				if (
+					!watchedVideoIDs.some((val) => videoId === val) &&
+					bar.style.width &&
+					parseInt(bar.style.width, 10) >=
+						gmc.get('HIDDEN_THRESHOLD_PERCENT')
+				) {
+					saveWatchedVideoToLocalStorage(videoId);
+					watched = true;
+				}
+
+				return watched;
+			});
+
+			// const watchedVids = withThreshold.concat(savedWatchedVideos);
+
+			logDebug(
+				`Found ${watched.length} watched elements ` +
+					`(${withThreshold.length} within threshold)`
+			);
+
+			return savedWatchedVideos;
+		} catch (error) {
+			console.error(error);
+		}
+	}
 
 	// ===========================================================
 
 	const findShortsContainers = function () {
 		const shortsContainers = [
 			// Subscriptions Page (List View)
-			document.querySelectorAll('ytd-reel-shelf-renderer ytd-reel-item-renderer'),
-			document.querySelectorAll('ytd-rich-shelf-renderer ytd-rich-grid-slim-media'),
+			document.querySelectorAll(
+				'ytd-reel-shelf-renderer ytd-reel-item-renderer'
+			),
+			document.querySelectorAll(
+				'ytd-rich-shelf-renderer ytd-rich-grid-slim-media'
+			),
 			// Home Page & Subscriptions Page (Grid View)
 			document.querySelectorAll('ytd-reel-shelf-renderer ytd-thumbnail'),
 			// Search results page
-			document.querySelectorAll('ytd-reel-shelf-renderer .ytd-reel-shelf-renderer'),
+			document.querySelectorAll(
+				'ytd-reel-shelf-renderer .ytd-reel-shelf-renderer'
+			),
 		].reduce((acc, matches) => {
 			matches?.forEach((child) => {
-				const container = child.closest('ytd-reel-shelf-renderer') || child.closest('ytd-rich-shelf-renderer');
+				const container =
+					child.closest('ytd-reel-shelf-renderer') ||
+					child.closest('ytd-rich-shelf-renderer');
 				if (container && !acc.includes(container)) acc.push(container);
 			});
 			return acc;
 		}, []);
 
 		// Search results sometimes also show Shorts as if they're regular videos with a little "Shorts" badge
-		document.querySelectorAll('.ytd-thumbnail-overlay-time-status-renderer[aria-label="Shorts"]').forEach((child) => {
-			const container = child.closest('ytd-video-renderer');
-			shortsContainers.push(container);
-		});
+		document
+			.querySelectorAll(
+				'.ytd-thumbnail-overlay-time-status-renderer[aria-label="Shorts"]'
+			)
+			.forEach((child) => {
+				const container = child.closest('ytd-video-renderer');
+				shortsContainers.push(container);
+			});
 
 		logDebug(`Found ${shortsContainers.length} shorts container elements`);
 
@@ -229,13 +420,21 @@
 
 	// ===========================================================
 
+	/**
+	 * Get current youtube section.
+	 *
+	 * @returns {"misc"|"watch"|"channel"|"subscriptions"|"trending"|"playlist"} - The element before the target element, or null if not found.
+	 */
 	const determineYoutubeSection = function () {
-		const {href} = window.location;
+		const { href } = window.location;
 
 		let youtubeSection = 'misc';
 		if (href.includes('/watch?')) {
 			youtubeSection = 'watch';
-		} else if (href.match(/.*\/(user|channel|c)\/.+\/videos/u) || href.match(/.*\/@.*/u)) {
+		} else if (
+			href.match(/.*\/(user|channel|c)\/.+\/videos/u) ||
+			href.match(/.*\/@.*/u)
+		) {
 			youtubeSection = 'channel';
 		} else if (href.includes('/feed/subscriptions')) {
 			youtubeSection = 'subscriptions';
@@ -251,8 +450,12 @@
 
 	const updateClassOnWatchedItems = function () {
 		// Remove existing classes
-		document.querySelectorAll('.YT-HWV-WATCHED-DIMMED').forEach((el) => el.classList.remove('YT-HWV-WATCHED-DIMMED'));
-		document.querySelectorAll('.YT-HWV-WATCHED-HIDDEN').forEach((el) => el.classList.remove('YT-HWV-WATCHED-HIDDEN'));
+		document
+			.querySelectorAll('.YT-HWV-WATCHED-DIMMED')
+			.forEach((el) => el.classList.remove('YT-HWV-WATCHED-DIMMED'));
+		document
+			.querySelectorAll('.YT-HWV-WATCHED-HIDDEN')
+			.forEach((el) => el.classList.remove('YT-HWV-WATCHED-HIDDEN'));
 
 		// If we're on the History page -- do nothing. We don't want to hide
 		// watched videos here.
@@ -272,19 +475,22 @@
 				// For rows, hide the row and the header too. We can't hide
 				// their entire parent because then we'll get the infinite
 				// page loader to load forever.
-				watchedItem = (
+				watchedItem =
 					// Grid item
 					item.closest('.ytd-grid-renderer') ||
 					item.closest('.ytd-item-section-renderer') ||
 					item.closest('.ytd-rich-grid-row') ||
 					// List item
-					item.closest('#grid-container')
-				);
+					item.closest('#grid-container');
 
 				// If we're hiding the .ytd-item-section-renderer element, we need to give it
 				// some extra spacing otherwise we'll get stuck in infinite page loading
-				if (watchedItem?.classList.contains('ytd-item-section-renderer')) {
-					watchedItem.closest('ytd-item-section-renderer').classList.add('YT-HWV-HIDDEN-ROW-PARENT');
+				if (
+					watchedItem?.classList.contains('ytd-item-section-renderer')
+				) {
+					watchedItem
+						.closest('ytd-item-section-renderer')
+						.classList.add('YT-HWV-HIDDEN-ROW-PARENT');
 				}
 			} else if (section === 'playlist') {
 				watchedItem = item.closest('ytd-playlist-video-renderer');
@@ -297,25 +503,24 @@
 				// `ytd-playlist-panel-video-renderer`:
 				// let's also ignore it as in case of shuffle enabled
 				// we could accidentially hide the item which gonna play next.
-				if (
-					watchedItem?.closest('ytd-compact-autoplay-renderer')
-				) {
+				if (watchedItem?.closest('ytd-compact-autoplay-renderer')) {
 					watchedItem = null;
 				}
 
 				// For playlist items, we never hide them, but we will dim
 				// them even if current mode is to hide rather than dim.
-				const watchedItemInPlaylist = item.closest('ytd-playlist-panel-video-renderer');
+				const watchedItemInPlaylist = item.closest(
+					'ytd-playlist-panel-video-renderer'
+				);
 				if (!watchedItem && watchedItemInPlaylist) {
 					dimmedItem = watchedItemInPlaylist;
 				}
 			} else {
 				// For home page and other areas
-				watchedItem = (
+				watchedItem =
 					item.closest('ytd-rich-item-renderer') ||
 					item.closest('ytd-video-renderer') ||
-					item.closest('ytd-grid-video-renderer')
-				);
+					item.closest('ytd-grid-video-renderer');
 			}
 
 			if (watchedItem) {
@@ -338,8 +543,12 @@
 	const updateClassOnShortsItems = function () {
 		const section = determineYoutubeSection();
 
-		document.querySelectorAll('.YT-HWV-SHORTS-DIMMED').forEach((el) => el.classList.remove('YT-HWV-SHORTS-DIMMED'));
-		document.querySelectorAll('.YT-HWV-SHORTS-HIDDEN').forEach((el) => el.classList.remove('YT-HWV-SHORTS-HIDDEN'));
+		document
+			.querySelectorAll('.YT-HWV-SHORTS-DIMMED')
+			.forEach((el) => el.classList.remove('YT-HWV-SHORTS-DIMMED'));
+		document
+			.querySelectorAll('.YT-HWV-SHORTS-HIDDEN')
+			.forEach((el) => el.classList.remove('YT-HWV-SHORTS-HIDDEN'));
 
 		const state = localStorage[`YTHWV_STATE_SHORTS_${section}`];
 
@@ -357,6 +566,158 @@
 
 	// ===========================================================
 
+	function markAllVideosInPlaylistAsWatched() {
+		if (determineYoutubeSection() === 'watch') {
+			const allVideoLinks = document.querySelectorAll(
+				'ytd-playlist-panel-video-renderer a[href].ytd-thumbnail'
+			);
+
+			const allMarkedAsWatched = loadWatchedVideosFromLocalStorage();
+
+			Array.from(allVideoLinks).forEach((link) => {
+				const videoId = link
+					.getAttribute('href')
+					.match(/[?&]v=([^&]+)/)[1];
+				if (
+					allMarkedAsWatched === null ||
+					!allMarkedAsWatched.some((val) => val === videoId)
+				) {
+					saveWatchedVideoToLocalStorage(videoId);
+				}
+			});
+		} else {
+			const allVideoLinks = document.querySelectorAll(
+				'#primary:has(#content) a#thumbnail'
+			);
+
+			const allMarkedAsWatched = loadWatchedVideosFromLocalStorage();
+
+			Array.from(allVideoLinks).forEach((link) => {
+				const videoId = link
+					.getAttribute('href')
+					.match(/[?&]v=([^&]+)/)[1];
+				if (
+					allMarkedAsWatched === null ||
+					!allMarkedAsWatched.some((val) => val === videoId)
+				) {
+					saveWatchedVideoToLocalStorage(videoId);
+				}
+			});
+		}
+
+		alert('All videos in playlist marked as watched!');
+	}
+
+	// ===========================================================
+
+	function markAllVideosInPlaylistAsNotWatched() {
+		if (determineYoutubeSection() === 'watch') {
+			const allVideoLinks = document.querySelectorAll(
+				'ytd-playlist-panel-video-renderer a[href].ytd-thumbnail'
+			);
+
+			const allMarkedAsWatched = loadWatchedVideosFromLocalStorage();
+
+			Array.from(allVideoLinks).forEach((link) => {
+				const videoId = link
+					.getAttribute('href')
+					.match(/[?&]v=([^&]+)/)[1];
+				if (
+					allMarkedAsWatched !== null &&
+					allMarkedAsWatched.some((val) => val === videoId)
+				) {
+					removeVideoFromLocalStorage(videoId);
+				}
+			});
+		} else {
+			const allVideoLinks = document.querySelectorAll(
+				'#primary:has(#content) a#thumbnail'
+			);
+
+			const allMarkedAsWatched = loadWatchedVideosFromLocalStorage();
+
+			Array.from(allVideoLinks).forEach((link) => {
+				const videoId = link
+					.getAttribute('href')
+					.match(/[?&]v=([^&]+)/)[1];
+				if (
+					allMarkedAsWatched !== null &&
+					allMarkedAsWatched.some((val) => val === videoId)
+				) {
+					removeVideoFromLocalStorage(videoId);
+				}
+			});
+		}
+
+		alert('All videos in playlist marked as not watched!');
+	}
+
+	// ===========================================================
+
+	/**
+	 * Renders toggle watch state for video.
+	 *
+	 * @param {HTMLElement} markAsWatchedButtonsContainer - The buttons container.
+	 * @param {Boolean} isWatched - Is the video id watched.
+	 * @param {String} videoId - The target video id.
+	 */
+	function renderToggleWatchStateButtons(
+		markAsWatchedButtonsContainer,
+		isWatched,
+		videoId
+	) {
+		if (
+			markAsWatchedButtonsContainer.querySelector('#MarkAsNotWatched') ===
+				null &&
+			isWatched
+		) {
+			markAsWatchedButtonsContainer.innerHTML = '';
+			const markNotAsWatchedButton = document.createElement('button');
+
+			markNotAsWatchedButton.innerHTML = EYE_ICON_HIDDEN;
+			markNotAsWatchedButton.id = 'MarkAsNotWatched';
+			markNotAsWatchedButton.addEventListener('click', (e) => {
+				e.stopPropagation();
+				e.preventDefault();
+				removeVideoFromLocalStorage(videoId);
+			});
+
+			markAsWatchedButtonsContainer.appendChild(markNotAsWatchedButton);
+		} else if (
+			markAsWatchedButtonsContainer.querySelector('#MarkAsWatched') ===
+				null &&
+			!isWatched
+		) {
+			markAsWatchedButtonsContainer.innerHTML = '';
+			const markAsWatchedButton = document.createElement('button');
+
+			markAsWatchedButton.innerHTML = EYE_ICON;
+			markAsWatchedButton.id = 'MarkAsWatched';
+			markAsWatchedButton.addEventListener('click', (e) => {
+				e.stopPropagation();
+				e.preventDefault();
+				saveWatchedVideoToLocalStorage(videoId);
+			});
+
+			markAsWatchedButtonsContainer.appendChild(markAsWatchedButton);
+		}
+	}
+
+	// ===========================================================
+
+	/**
+	 * Description
+	 * @param {string} htmlString
+	 * @returns {Element}
+	 */
+	function createElementFromHTMLString(htmlString) {
+		var div = document.createElement('div');
+		div.innerHTML = htmlString.trim();
+
+		// Change this to div.childNodes to support multiple top-level nodes.
+		return div.firstChild;
+	}
+
 	const renderButtons = function () {
 		// Find button area target
 		const target = findButtonAreaTarget();
@@ -370,25 +731,33 @@
 		buttonArea.classList.add('YT-HWV-BUTTONS');
 
 		// Render buttons
-		BUTTONS.forEach(({icon, iconHidden, name, stateKey, type}) => {
+		BUTTONS.forEach(({ icon, iconHidden, name, stateKey, type }) => {
 			// For toggle buttons, determine where in localStorage they track state
 			const section = determineYoutubeSection();
 			const storageKey = [stateKey, section].join('_');
-			const toggleButtonState = localStorage.getItem(storageKey) || 'normal';
+			const toggleButtonState =
+				localStorage.getItem(storageKey) || 'normal';
 
 			// Generate button DOM
 			const button = document.createElement('button');
-			button.title = type === 'toggle' ? `${name} : currently "${toggleButtonState}" for section "${section}"` : `${name}`;
+			button.title =
+				type === 'toggle'
+					? `${name} : currently "${toggleButtonState}" for section "${section}"`
+					: `${name}`;
 			button.classList.add('YT-HWV-BUTTON');
-			if (toggleButtonState !== 'normal') button.classList.add('YT-HWV-BUTTON-DISABLED');
-			button.innerHTML = toggleButtonState === 'hidden' ? iconHidden : icon;
+			if (toggleButtonState !== 'normal')
+				button.classList.add('YT-HWV-BUTTON-DISABLED');
+			button.innerHTML =
+				toggleButtonState === 'hidden' ? iconHidden : icon;
 			buttonArea.appendChild(button);
 
 			// Attach events for toggle buttons
 			switch (type) {
 				case 'toggle':
 					button.addEventListener('click', () => {
-						logDebug(`Button ${name} clicked. State: ${toggleButtonState}`);
+						logDebug(
+							`Button ${name} clicked. State: ${toggleButtonState}`
+						);
 
 						let newState = 'dimmed';
 						if (toggleButtonState === 'dimmed') {
@@ -413,6 +782,336 @@
 			}
 		});
 
+		Array.from(
+			document.querySelectorAll(
+				'.ytd-playlist-panel-renderer#playlist-action-menu #top-level-buttons-computed'
+			)
+		).forEach((actionMenu) => {
+			if (!actionMenu) return;
+			if (actionMenu.querySelector('#MarkAllAsWatched') === null) {
+				const button = document.createElement('button');
+
+				button.innerText = 'Mark all as watched';
+				button.id = 'MarkAllAsWatched';
+				button.addEventListener(
+					'click',
+					markAllVideosInPlaylistAsWatched
+				);
+
+				actionMenu.appendChild(button);
+			}
+		});
+
+		const section = determineYoutubeSection();
+
+		if (section === 'watch') {
+			const isWatched = loadWatchedVideosFromLocalStorage().some(
+				(val) =>
+					document.URL.match(/[?&]v=([^&]+)/) !== null &&
+					val === document.URL.match(/[?&]v=([^&]+)/)[1]
+			);
+			Array.from(
+				document.querySelectorAll(
+					'#playlist #container #items #playlist-items'
+				)
+			).forEach((actionMenu) => {
+				if (!actionMenu) return;
+
+				const videoId = actionMenu
+					.querySelector('a#wc-endpoint')
+					.getAttribute('href')
+					.match(/[?&]v=([^&]+)/)[1];
+
+				if (!videoId) return;
+
+				if (
+					!actionMenu.querySelector(
+						'#wc-endpoint #container #meta #action-buttons #playlistVideoWatchedButtonsContainer'
+					)
+				) {
+					const markAsWatchedButtonsContainer =
+						document.createElement('div');
+					markAsWatchedButtonsContainer.id =
+						'playlistVideoWatchedButtonsContainer';
+					actionMenu
+						.querySelector(
+							'#wc-endpoint #container #meta #action-buttons'
+						)
+						.append(markAsWatchedButtonsContainer);
+					actionMenu
+						.querySelector(
+							'#wc-endpoint #container #meta #action-buttons'
+						)
+						.removeAttribute('hidden');
+				}
+				renderToggleWatchStateButtons(
+					actionMenu.querySelector(
+						'#wc-endpoint #container #meta #action-buttons #playlistVideoWatchedButtonsContainer'
+					),
+					loadWatchedVideosFromLocalStorage().some(
+						(val) => val === videoId
+					),
+					videoId
+				);
+			});
+
+			if (
+				document.querySelector('#videoWatched') === null &&
+				isWatched &&
+				document.querySelector('#below #messages') !== null
+			) {
+				const alreadyWatchedWarning = document.createElement('p');
+				alreadyWatchedWarning.style =
+					'color:var(--main-color);border-radius: 25rem;border: red solid;padding-block: 0.7rem;padding-inline: 1.4rem;width: fit-content;font-size: 2rem;font-weight: bold;';
+				alreadyWatchedWarning.innerText = 'Watched';
+				alreadyWatchedWarning.id = 'videoWatched';
+				document
+					.querySelector('#below #messages')
+					.appendChild(alreadyWatchedWarning);
+			} else if (
+				document.querySelector('#videoWatched') !== null &&
+				!isWatched
+			) {
+				document.querySelector('#below #messages').innerHTML = '';
+			}
+
+			if (
+				document.querySelector(
+					'#below #markAsWatchedButtonsContainer'
+				) === null
+			) {
+				const markAsWatchedButtonsContainer =
+					document.createElement('div');
+				markAsWatchedButtonsContainer.id =
+					'markAsWatchedButtonsContainer';
+
+				if (document.querySelector('#below #limited-state') === null) {
+					setTimeout(run, 1000);
+					return;
+				}
+
+				document
+					.querySelector('#below #limited-state')
+					.insertAdjacentElement(
+						'afterend',
+						markAsWatchedButtonsContainer
+					);
+			}
+
+			if (
+				document.querySelector(
+					'#below #markAsWatchedButtonsContainer #MarkAsNotWatched'
+				) === null &&
+				isWatched
+			) {
+				document.querySelector(
+					'#below #markAsWatchedButtonsContainer'
+				).innerHTML = '';
+				const markNotAsWatchedButton = document.createElement('button');
+
+				markNotAsWatchedButton.innerHTML = EYE_ICON_HIDDEN;
+				markNotAsWatchedButton.id = 'MarkAsNotWatched';
+				markNotAsWatchedButton.addEventListener('click', () => {
+					const videoId = document.URL.match(/[?&]v=([^&]+)/)[1];
+					removeVideoFromLocalStorage(videoId);
+				});
+
+				document
+					.querySelector('#below #markAsWatchedButtonsContainer')
+					.appendChild(markNotAsWatchedButton);
+			} else if (
+				document.querySelector(
+					'#below #markAsWatchedButtonsContainer #MarkAsWatched'
+				) === null &&
+				!isWatched
+			) {
+				document.querySelector(
+					'#below #markAsWatchedButtonsContainer'
+				).innerHTML = '';
+				const markAsWatchedButton = document.createElement('button');
+
+				markAsWatchedButton.innerHTML = EYE_ICON;
+				markAsWatchedButton.id = 'MarkAsWatched';
+				markAsWatchedButton.addEventListener('click', () => {
+					const videoId = document.URL.match(/[?&]v=([^&]+)/)[1];
+					saveWatchedVideoToLocalStorage(videoId);
+				});
+
+				document
+					.querySelector('#below #markAsWatchedButtonsContainer')
+					.appendChild(markAsWatchedButton);
+			}
+		} else if (section === 'playlist') {
+			Array.from(
+				document.querySelectorAll(
+					'#primary:has(#contents) #contents #contents #contents > ytd-playlist-video-renderer #content #meta'
+				)
+			).forEach((actionMenu) => {
+				if (!actionMenu) return;
+
+				if (
+					actionMenu.querySelector(
+						'#markAsWatchedButtonsContainer'
+					) === null
+				) {
+					const markAsWatchedButtonsContainer =
+						document.createElement('div');
+					markAsWatchedButtonsContainer.id =
+						'markAsWatchedButtonsContainer';
+
+					if (
+						actionMenu.querySelector('ytd-video-meta-block') ===
+						null
+					) {
+						setTimeout(run, 1000);
+						return;
+					}
+
+					actionMenu
+						.querySelector('ytd-video-meta-block')
+						.insertAdjacentElement(
+							'afterend',
+							markAsWatchedButtonsContainer
+						);
+				}
+
+				const videoId = actionMenu
+					.querySelector('a#video-title')
+					.getAttribute('href')
+					.match(/[?&]v=([^&]+)/)[1];
+
+				const isWatched = loadWatchedVideosFromLocalStorage().some(
+					(val) => val === videoId
+				);
+
+				renderToggleWatchStateButtons(
+					actionMenu.querySelector('#markAsWatchedButtonsContainer'),
+					isWatched,
+					videoId
+				);
+			});
+
+			const YTPlaylistHeader = document.querySelector(
+				'ytd-playlist-header-renderer'
+			);
+
+			if (
+				YTPlaylistHeader.querySelector(
+					'#markAsWatchedButtonsContainer'
+				) === null
+			) {
+				const markAsWatchedButtonsContainer =
+					document.createElement('div');
+				markAsWatchedButtonsContainer.id =
+					'markAsWatchedButtonsContainer';
+
+				if (YTPlaylistHeader.querySelector('.play-menu') === null) {
+					setTimeout(run, 1000);
+					return;
+				}
+
+				YTPlaylistHeader.querySelector(
+					'.play-menu'
+				).insertAdjacentElement(
+					'afterend',
+					markAsWatchedButtonsContainer
+				);
+			}
+
+			const markAsWatchedButtonsContainer =
+				YTPlaylistHeader.querySelector(
+					'#markAsWatchedButtonsContainer'
+				);
+
+			if (
+				markAsWatchedButtonsContainer.querySelector(
+					'#MarkAllAsWatched'
+				) === null
+			) {
+				const button = document.createElement('button');
+
+				button.innerText = 'Mark all as watched';
+				button.id = 'MarkAllAsWatched';
+				button.addEventListener(
+					'click',
+					markAllVideosInPlaylistAsWatched
+				);
+
+				markAsWatchedButtonsContainer.appendChild(button);
+			}
+			if (
+				markAsWatchedButtonsContainer.querySelector(
+					'#MarkAllAsNotWatched'
+				) === null
+			) {
+				const button = document.createElement('button');
+
+				button.innerText = 'Mark all as not watched';
+				button.id = 'MarkAllAsNotWatched';
+				button.addEventListener(
+					'click',
+					markAllVideosInPlaylistAsNotWatched
+				);
+
+				markAsWatchedButtonsContainer.appendChild(button);
+			}
+		} else if (section === 'channel') {
+			Array.from(document.querySelectorAll('#contents #content')).forEach(
+				(actionMenu) => {
+					if (!actionMenu) return;
+
+					if (
+						actionMenu.querySelector('#MarkAsWatched') === null &&
+						actionMenu.querySelector('#video-title-link') !== null
+					) {
+						const video_id = actionMenu
+							.querySelector('#video-title-link')
+							.getAttribute('href')
+							.match(/[?&]v=([^&]+)/)[1];
+						const button = document.createElement('button');
+						const eyeIcon = createElementFromHTMLString(EYE_ICON);
+						eyeIcon.style = 'float: left;margin-left: 54px;';
+						button.appendChild(eyeIcon);
+						button.innerHTML += ' Mark as watched';
+						button.style = 'font-size: 1.5rem;';
+						button.id = 'MarkAsWatched';
+						button.addEventListener('click', () =>
+							saveWatchedVideoToLocalStorage(video_id)
+						);
+
+						actionMenu
+							.querySelector('#metadata')
+							.insertAdjacentElement('afterend', button);
+					}
+					if (
+						actionMenu.querySelector('#MarkAsNotWatched') ===
+							null &&
+						actionMenu.querySelector('#video-title-link') !== null
+					) {
+						const video_id = actionMenu
+							.querySelector('#video-title-link')
+							.getAttribute('href')
+							.match(/[?&]v=([^&]+)/)[1];
+						const button = document.createElement('button');
+						const eyeIconHidden =
+							createElementFromHTMLString(EYE_ICON_HIDDEN);
+						eyeIconHidden.style = 'float: left;margin-left: 54px;';
+						button.appendChild(eyeIconHidden);
+						button.innerHTML += ' Mark as not watched';
+						button.style = 'font-size: 1.5rem;';
+						button.id = 'MarkAsNotWatched';
+						button.addEventListener('click', () =>
+							removeVideoFromLocalStorage(video_id)
+						);
+
+						actionMenu
+							.querySelector('#metadata')
+							.insertAdjacentElement('afterend', button);
+					}
+				}
+			);
+		}
+
 		// Insert buttons into DOM
 		if (existingButtons) {
 			target.parentNode.replaceChild(buttonArea, existingButtons);
@@ -424,14 +1123,19 @@
 	};
 
 	const run = debounce((mutations) => {
-
 		// don't react if only *OUR* own buttons changed state
 		// to avoid running an endless loop
 
-		if (mutations && mutations.length === 1) { return; }
+		if (mutations && mutations.length === 1) {
+			return;
+		}
 
-		if (mutations[0].target.classList.contains('YT-HWV-BUTTON') ||
-			mutations[0].target.classList.contains('YT-HWV-BUTTON-SHORTS')) {
+		if (!mutations) return;
+
+		if (
+			mutations[0].target.classList.contains('YT-HWV-BUTTON') ||
+			mutations[0].target.classList.contains('YT-HWV-BUTTON-SHORTS')
+		) {
 			return;
 		}
 
@@ -448,23 +1152,30 @@
 	// Hijack all XHR calls
 	const send = XMLHttpRequest.prototype.send;
 	XMLHttpRequest.prototype.send = function (data) {
-		this.addEventListener('readystatechange', function () {
-			if (
-				// Anytime more videos are fetched -- re-run script
-				this.responseURL.indexOf('browse_ajax?action_continuation') > 0
-			) {
-				setTimeout(() => {
-					run();
-				}, 0);
-			}
-		}, false);
+		this.addEventListener(
+			'readystatechange',
+			function () {
+				if (
+					// Anytime more videos are fetched -- re-run script
+					this.responseURL.indexOf(
+						'browse_ajax?action_continuation'
+					) > 0
+				) {
+					setTimeout(() => {
+						run();
+					}, 0);
+				}
+			},
+			false
+		);
 		send.call(this, data);
 	};
 
 	// ===========================================================
 
 	const observeDOM = (function () {
-		const MutationObserver = window.MutationObserver || window.WebKitMutationObserver;
+		const MutationObserver =
+			window.MutationObserver || window.WebKitMutationObserver;
 		const eventListenerSupported = window.addEventListener;
 
 		return function (obj, callback) {
@@ -474,20 +1185,22 @@
 			if (!obj) return;
 
 			if (MutationObserver) {
-				const obs = new MutationObserver(((mutations, _observer) => {
-					if (mutations[0].addedNodes.length || mutations[0].removedNodes.length) {
-
+				const obs = new MutationObserver((mutations, _observer) => {
+					if (
+						mutations[0].addedNodes.length ||
+						mutations[0].removedNodes.length
+					) {
 						callback(mutations);
 					}
-				}));
+				});
 
-				obs.observe(obj, {childList: true, subtree: true});
+				obs.observe(obj, { childList: true, subtree: true });
 			} else if (eventListenerSupported) {
 				obj.addEventListener('DOMNodeInserted', callback, false);
 				obj.addEventListener('DOMNodeRemoved', callback, false);
 			}
 		};
-	}());
+	})();
 
 	// ===========================================================
 
@@ -499,5 +1212,35 @@
 	// re-run our script.
 	observeDOM(document.body, run);
 
+	function getPlayer() {
+		const player = document.getElementById('movie_player');
+		if (typeof player === 'undefined' || player === null) {
+			return;
+		}
+		const video_id = player.getVideoData().video_id;
+
+		const videoDuration = player.getDuration();
+
+		const currentTime = player.getCurrentTime();
+		if (
+			(currentTime / videoDuration) * 100 >=
+			gmc.get('HIDDEN_THRESHOLD_PERCENT')
+		) {
+			if (document.querySelector('#videoWatched') === null) {
+				const alreadyWatchedWarning = document.createElement('p');
+				alreadyWatchedWarning.style =
+					'color:var(--main-color);border-radius: 25rem;border: red solid;padding-block: 0.7rem;padding-inline: 1.4rem;width: fit-content;font-size: 2rem;font-weight: bold;';
+				alreadyWatchedWarning.innerText = 'Watched';
+				alreadyWatchedWarning.id = 'videoWatched';
+				document
+					.querySelector('#below #messages')
+					.appendChild(alreadyWatchedWarning);
+			}
+			saveWatchedVideoToLocalStorage(video_id);
+		}
+	}
+
+	setInterval(getPlayer, 3000);
+
 	run();
-}());
+})();
