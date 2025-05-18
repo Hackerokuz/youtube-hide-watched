@@ -34,6 +34,13 @@
 	const EYE_ICON_HIDDEN =
 		'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 48 48"><path fill="currentColor" d="M24 14c5.52 0 10 4.48 10 10 0 1.29-.26 2.52-.71 3.65l5.85 5.85c3.02-2.52 5.4-5.78 6.87-9.5-3.47-8.78-12-15-22.01-15-2.8 0-5.48.5-7.97 1.4l4.32 4.31c1.13-.44 2.36-.71 3.65-.71zM4 8.55l4.56 4.56.91.91C6.17 16.6 3.56 20.03 2 24c3.46 8.78 12 15 22 15 3.1 0 6.06-.6 8.77-1.69l.85.85L39.45 44 42 41.46 6.55 6 4 8.55zM15.06 19.6l3.09 3.09c-.09.43-.15.86-.15 1.31 0 3.31 2.69 6 6 6 .45 0 .88-.06 1.3-.15l3.09 3.09C27.06 33.6 25.58 34 24 34c-5.52 0-10-4.48-10-10 0-1.58.4-3.06 1.06-4.4zm8.61-1.57 6.3 6.3L30 24c0-3.31-2.69-6-6-6l-.33.03z"/></svg>';
 
+
+
+    // IndexedDB configuration
+    const DB_NAME = 'YouTubeHideWatchedDB';
+    const STORE_NAME = 'watchedVideos';
+    const VERSION = 1;
+
 	// GM_config setup
 	const title = document.createElement('a');
 	title.textContent = 'YouTube: Hide Watched Videos Settings';
@@ -55,6 +62,46 @@
 			},
 		},
 		id: 'YouTubeHideWatchedVideos',
+		'css': `
+		html {
+			background: var(--bg-2-popups);
+			color-scheme: dark;
+		}
+		#YouTubeHideWatchedVideos {
+			background: transparent;
+			color: #aaa
+		}
+		#YouTubeHideWatchedVideos_saveBtn {
+			background: #222;
+			color: #aaa;
+			border: none;
+			cursor: pointer;
+		}
+		#YouTubeHideWatchedVideos_saveBtn:hover {
+			background: #222;
+			color: #aaa;
+			border: none;
+		}
+		#YouTubeHideWatchedVideos_closeBtn {
+			background: #222;
+			color: #aaa;
+			border: none;
+			cursor: pointer;
+		}
+		#YouTubeHideWatchedVideos .section_header_holder {
+			margin-top: 2rem;
+			margin-bottom: 2rem;
+		}
+		#YouTubeHideWatchedVideos_closeBtn:hover {
+			background: #222;
+			color: #aaa;
+			border: none;
+		}
+		#YouTubeHideWatchedVideos .reset {
+			color: #aaa;
+			cursor: pointer;
+		}`,
+        //'frameStyle': '',
 		title,
 	});
 
@@ -137,6 +184,10 @@
 	z-index: 9999;
 }
 
+.YT-HWV-COPY-BUTTON * {
+	fill: var(--yt-spec-icon-inactive);
+}
+
 .YT-HWV-MENU-ON { display: block; }
 .YT-HWV-MENUBUTTON-ON span { transform: rotate(180deg) }
 `);
@@ -172,95 +223,95 @@
 
 	// ===========================================================
 
-	/**
-	 * Saves watched video to localStorage.
-	 *
-	 * @param {string} videoId - The video id to be saved.
-	 * @returns {boolean} - Returns true if the data was successfully saved, false otherwise.
-	 */
-	function saveWatchedVideoToLocalStorage(videoId) {
-		try {
-			let watchedVideos = loadWatchedVideosFromLocalStorage();
+    // IndexedDB Initialization
+    const initDB = () => {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, VERSION);
 
-			if (watchedVideos === null) {
-				watchedVideos = [videoId];
-			} else if (!watchedVideos.some((val) => val === videoId)) {
-				watchedVideos.push(videoId);
-			}
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME, { keyPath: 'videoId' });
+                }
+            };
 
-			// Convert data to JSON string before saving
-			const jsonData = JSON.stringify([...new Set(watchedVideos)]);
+            request.onsuccess = (event) => {
+                resolve(event.target.result);
+            };
 
-			// Save data to localStorage
-			localStorage.setItem(LOCALSTORAGE_WATCHED_VIDEOS_KEY, jsonData);
+            request.onerror = (event) => {
+                reject(event.target.error);
+            };
+        });
+    };
 
-			return true; // Saved successfully
-		} catch (error) {
-			console.error('Error saving to localStorage:', error);
-			return false; // Failed to save
-		} finally {
-			updateClassOnWatchedItems();
-			renderButtons();
-		}
-	}
+    // Add watched video to IndexedDB
+    const addWatchedVideo = (videoId) => {
+        return new Promise((resolve, reject) => {
+            initDB().then((db) => {
+                const transaction = db.transaction(STORE_NAME, 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const addRequest = store.add({ videoId: videoId });
 
-	/**
-	 * Removes video from localStorage.
-	 *
-	 * @param {string} videoId - The video id to be saved.
-	 * @returns {boolean} - Returns true if the data was successfully saved, false otherwise.
-	 */
-	function removeVideoFromLocalStorage(videoId) {
-		try {
-			let watchedVideos = loadWatchedVideosFromLocalStorage();
+                addRequest.onsuccess = () => {
+                    resolve(true);
+                };
 
-			if (watchedVideos === null) {
-				watchedVideos = [];
-			} else {
-				watchedVideos = watchedVideos.filter((val) => val !== videoId);
-			}
+                addRequest.onerror = (event) => {
+                    if (event.target.error.name === 'ConstraintError') {
+                        // Video already exists, update if necessary
+                        resolve(false);
+                    } else {
+                        reject(event.target.error);
+                    }
+                };
+            }).catch((error) => {
+                reject(error);
+            });
+        });
+    };
 
-			// Convert data to JSON string before saving
-			const jsonData = JSON.stringify(watchedVideos);
+    // Remove watched video from IndexedDB
+    const removeWatchedVideo = (videoId) => {
+        return new Promise((resolve, reject) => {
+            initDB().then((db) => {
+                const transaction = db.transaction(STORE_NAME, 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const deleteRequest = store.delete(videoId);
 
-			// Save data to localStorage
-			localStorage.setItem(LOCALSTORAGE_WATCHED_VIDEOS_KEY, jsonData);
+                deleteRequest.onsuccess = () => {
+                    resolve(true);
+                };
 
-			return true; // Saved successfully
-		} catch (error) {
-			console.error('Error saving to localStorage:', error);
-			return false; // Failed to save
-		} finally {
-			updateClassOnWatchedItems();
-			renderButtons();
-		}
-	}
+                deleteRequest.onerror = (event) => {
+                    reject(event.target.error);
+                };
+            }).catch((error) => {
+                reject(error);
+            });
+        });
+    };
 
-	/**
-	 * Loads watched videos from localStorage.
-	 *
-	 * @returns {string[]|null} - Returns watched videos if successful, or null if the data is not found.
-	 */
-	function loadWatchedVideosFromLocalStorage() {
-		try {
-			// Retrieve data from localStorage
-			const jsonData = localStorage.getItem(
-				LOCALSTORAGE_WATCHED_VIDEOS_KEY
-			);
+    // Load watched videos from IndexedDB
+    const loadWatchedVideos = () => {
+        return new Promise((resolve, reject) => {
+            initDB().then((db) => {
+                const transaction = db.transaction(STORE_NAME, 'readonly');
+                const store = transaction.objectStore(STORE_NAME);
+                const getRequest = store.getAll();
 
-			if (jsonData === null) {
-				return []; // Data not found
-			}
+                getRequest.onsuccess = (event) => {
+                    resolve(event.target.result.map(item => item.videoId));
+                };
 
-			// Parse JSON string to get the original data
-			const data = JSON.parse(jsonData);
-
-			return data;
-		} catch (error) {
-			console.error('Error loading from localStorage:', error);
-			return []; // Failed to load
-		}
-	}
+                getRequest.onerror = (event) => {
+                    reject(event.target.error);
+                };
+            }).catch((error) => {
+                reject(error);
+            });
+        });
+    };
 
 	// ===========================================================
 
@@ -300,9 +351,9 @@
 	 * Find all watched videos
 	 * @returns {Element[]|null}
 	 */
-	function findWatchedElements() {
+	async function findWatchedElements() {
 		try {
-			const watchedVideoIDs = loadWatchedVideosFromLocalStorage();
+			const watchedVideoIDs = await loadWatchedVideos();
 
 			const allVideoLinks = document.querySelectorAll(
 				'a[href].ytd-thumbnail'
@@ -349,7 +400,7 @@
 					parseInt(bar.style.width, 10) >=
 						gmc.get('HIDDEN_THRESHOLD_PERCENT')
 				) {
-					saveWatchedVideoToLocalStorage(videoId);
+					addWatchedVideo(videoId);
 					watched = true;
 				}
 
@@ -448,7 +499,7 @@
 
 	// ===========================================================
 
-	const updateClassOnWatchedItems = function () {
+	const updateClassOnWatchedItems = async function () {
 		// Remove existing classes
 		document
 			.querySelectorAll('.YT-HWV-WATCHED-DIMMED')
@@ -464,7 +515,7 @@
 		const section = determineYoutubeSection();
 		const state = localStorage[`YTHWV_STATE_${section}`];
 
-		findWatchedElements().forEach((item, _i) => {
+		(await findWatchedElements()).forEach((item, _i) => {
 			let watchedItem;
 			let dimmedItem;
 
@@ -566,13 +617,13 @@
 
 	// ===========================================================
 
-	function markAllVideosInPlaylistAsWatched() {
+	async function markAllVideosInPlaylistAsWatched() {
 		if (determineYoutubeSection() === 'watch') {
 			const allVideoLinks = document.querySelectorAll(
 				'ytd-playlist-panel-video-renderer a[href].ytd-thumbnail'
 			);
 
-			const allMarkedAsWatched = loadWatchedVideosFromLocalStorage();
+			const allMarkedAsWatched = await loadWatchedVideos();
 
 			Array.from(allVideoLinks).forEach((link) => {
 				const videoId = link
@@ -582,7 +633,7 @@
 					allMarkedAsWatched === null ||
 					!allMarkedAsWatched.some((val) => val === videoId)
 				) {
-					saveWatchedVideoToLocalStorage(videoId);
+					addWatchedVideo(videoId);
 				}
 			});
 		} else {
@@ -590,7 +641,7 @@
 				'#primary:has(#content) a#thumbnail'
 			);
 
-			const allMarkedAsWatched = loadWatchedVideosFromLocalStorage();
+			const allMarkedAsWatched = await loadWatchedVideos();
 
 			Array.from(allVideoLinks).forEach((link) => {
 				const videoId = link
@@ -600,7 +651,7 @@
 					allMarkedAsWatched === null ||
 					!allMarkedAsWatched.some((val) => val === videoId)
 				) {
-					saveWatchedVideoToLocalStorage(videoId);
+					addWatchedVideo(videoId);
 				}
 			});
 		}
@@ -610,13 +661,13 @@
 
 	// ===========================================================
 
-	function markAllVideosInPlaylistAsNotWatched() {
+	async function markAllVideosInPlaylistAsNotWatched() {
 		if (determineYoutubeSection() === 'watch') {
 			const allVideoLinks = document.querySelectorAll(
 				'ytd-playlist-panel-video-renderer a[href].ytd-thumbnail'
 			);
 
-			const allMarkedAsWatched = loadWatchedVideosFromLocalStorage();
+			const allMarkedAsWatched = await loadWatchedVideos();
 
 			Array.from(allVideoLinks).forEach((link) => {
 				const videoId = link
@@ -626,7 +677,7 @@
 					allMarkedAsWatched !== null &&
 					allMarkedAsWatched.some((val) => val === videoId)
 				) {
-					removeVideoFromLocalStorage(videoId);
+					removeWatchedVideo(videoId);
 				}
 			});
 		} else {
@@ -634,7 +685,7 @@
 				'#primary:has(#content) a#thumbnail'
 			);
 
-			const allMarkedAsWatched = loadWatchedVideosFromLocalStorage();
+			const allMarkedAsWatched = await loadWatchedVideos();
 
 			Array.from(allVideoLinks).forEach((link) => {
 				const videoId = link
@@ -644,7 +695,7 @@
 					allMarkedAsWatched !== null &&
 					allMarkedAsWatched.some((val) => val === videoId)
 				) {
-					removeVideoFromLocalStorage(videoId);
+					removeWatchedVideo(videoId);
 				}
 			});
 		}
@@ -679,7 +730,7 @@
 			markNotAsWatchedButton.addEventListener('click', (e) => {
 				e.stopPropagation();
 				e.preventDefault();
-				removeVideoFromLocalStorage(videoId);
+				removeWatchedVideo(videoId);
 			});
 
 			markAsWatchedButtonsContainer.appendChild(markNotAsWatchedButton);
@@ -696,7 +747,7 @@
 			markAsWatchedButton.addEventListener('click', (e) => {
 				e.stopPropagation();
 				e.preventDefault();
-				saveWatchedVideoToLocalStorage(videoId);
+				addWatchedVideo(videoId);
 			});
 
 			markAsWatchedButtonsContainer.appendChild(markAsWatchedButton);
@@ -718,7 +769,7 @@
 		return div.firstChild;
 	}
 
-	const renderButtons = function () {
+	const renderButtons = async function () {
 		// Find button area target
 		const target = findButtonAreaTarget();
 		if (!target) return;
@@ -731,7 +782,7 @@
 		buttonArea.classList.add('YT-HWV-BUTTONS');
 
 		// Render buttons
-		BUTTONS.forEach(({ icon, iconHidden, name, stateKey, type }) => {
+		BUTTONS.forEach(async ({ icon, iconHidden, name, stateKey, type }) => {
 			// For toggle buttons, determine where in localStorage they track state
 			const section = determineYoutubeSection();
 			const storageKey = [stateKey, section].join('_');
@@ -787,33 +838,90 @@
 		const copyBtn = document.createElement("button");
 
 		copyBtn.title = "Copy video IDs to clipboard!"
+		copyBtn.classList.add('YT-HWV-BUTTON');
+		copyBtn.classList.add('YT-HWV-COPY-BUTTON');
 		copyBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path fill-rule="evenodd" clip-rule="evenodd" d="M21 8C21 6.34315 19.6569 5 18 5H10C8.34315 5 7 6.34315 7 8V20C7 21.6569 8.34315 23 10 23H18C19.6569 23 21 21.6569 21 20V8ZM19 8C19 7.44772 18.5523 7 18 7H10C9.44772 7 9 7.44772 9 8V20C9 20.5523 9.44772 21 10 21H18C18.5523 21 19 20.5523 19 20V8Z" fill="#0F0F0F"/>
 <path d="M6 3H16C16.5523 3 17 2.55228 17 2C17 1.44772 16.5523 1 16 1H6C4.34315 1 3 2.34315 3 4V18C3 18.5523 3.44772 19 4 19C4.55228 19 5 18.5523 5 18V4C5 3.44772 5.44772 3 6 3Z" fill="#0F0F0F"/>
 </svg>`
-		copyBtn.addEventListener("click", (e) => {
+		copyBtn.addEventListener("click", async (e) => {
 			e.preventDefault();
-			navigator.clipboard.writeText(JSON.stringify(loadWatchedVideosFromLocalStorage()));
+			navigator.clipboard.writeText(JSON.stringify(await loadWatchedVideos()));
 		});
 
 		buttonArea.appendChild(copyBtn);
 
 		/* ------------------------------- LOAD BUTTON ------------------------------ */
 
-		const loadBtn = document.createElement("button");
+		// Load button to load video IDs from clipboard into IndexedDB
+        const loadBtn = document.createElement("button");
 
-		loadBtn.title = "Load video IDs from clipboard!"
-		loadBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-upload"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>`
-		loadBtn.addEventListener("click", (e) => {
-			e.preventDefault();
-			navigator.clipboard.readText().then((watchedVideoIDs) => {
-				if (typeof watchedVideoIDs === "string" && watchedVideoIDs.length > 2) {
-					localStorage.setItem(LOCALSTORAGE_WATCHED_VIDEOS_KEY, watchedVideoIDs);
-					run();
-					alert("Videos successfully loaded!")
-				} else alert("No videos in clipboard available to upload")
-			}).catch(() => alert("Error loading text from clipboard!"))
-		});
+        loadBtn.title = "Load video IDs from clipboard into IndexedDB";
+        loadBtn.classList.add('YT-HWV-BUTTON');
+        loadBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-upload"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>`;
+
+        loadBtn.addEventListener("click", async (e) => {
+            e.preventDefault();
+            try {
+                const watchedVideoIDs = await navigator.clipboard.readText();
+                if (typeof watchedVideoIDs !== "string" || watchedVideoIDs.trim() === "") {
+                    alert("No valid video IDs found in the clipboard.");
+                    return;
+                }
+
+                // Parse the clipboard content
+                // Assuming the clipboard contains a JSON string of an array of video IDs
+                let parsedVideoIDs;
+                try {
+                    parsedVideoIDs = JSON.parse(watchedVideoIDs);
+                    if (!Array.isArray(parsedVideoIDs)) {
+                        throw new Error("Clipboard content is not an array of video IDs.");
+                    }
+                } catch (parseError) {
+                    // If parsing fails, assume the clipboard contains a comma-separated list of video IDs
+                    parsedVideoIDs = watchedVideoIDs.split(/[\s,]+/);
+                }
+
+                // Validate and deduplicate video IDs
+                const validVideoIDs = [...new Set(parsedVideoIDs.filter(id => /^[a-zA-Z0-9_-]{10,}$/.test(id)))];
+                if (validVideoIDs.length === 0) {
+                    alert("No valid video IDs found in the clipboard.");
+                    return;
+                }
+
+                // Add video IDs to IndexedDB
+                const db = await initDB();
+                const transaction = db.transaction(STORE_NAME, 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+
+                const addPromises = validVideoIDs.map(id => {
+					return new Promise((resolve, reject) => {
+						const request = store.add({ videoId: id });
+						request.onsuccess = () => resolve(true);
+						request.onerror = (event) => {
+							if (event.target.error.name === 'ConstraintError') {
+								// Video ID already exists, skip
+								resolve(false);
+							} else {
+								reject(event.target.error);
+							}
+						};
+					});
+				});
+		
+				// Wait for all add operations to complete
+				const results = await Promise.all(addPromises);
+				const addedCount = results.filter(result => result).length;
+				const skippedCount = results.length - addedCount;
+		
+				await transaction.done;
+                alert(`${validVideoIDs.length} video(s) successfully loaded into IndexedDB! ${skippedCount} video(s) skipped!`);
+                run();
+            } catch (error) {
+                console.error("Error loading video IDs from clipboard:", error);
+                alert("Failed to load video IDs from clipboard.");
+            }
+        });
 
 		buttonArea.appendChild(loadBtn);
 
@@ -840,7 +948,7 @@
 		const section = determineYoutubeSection();
 
 		if (section === 'watch') {
-			const isWatched = loadWatchedVideosFromLocalStorage().some(
+			const isWatched = (await loadWatchedVideos()).some(
 				(val) =>
 					document.URL.match(/[?&]v=([^&]+)/) !== null &&
 					val === document.URL.match(/[?&]v=([^&]+)/)[1]
@@ -849,7 +957,7 @@
 				document.querySelectorAll(
 					'#playlist #container #items #playlist-items'
 				)
-			).forEach((actionMenu) => {
+			).forEach(async (actionMenu) => {
 				if (!actionMenu) return;
 
 				const videoId = actionMenu
@@ -883,7 +991,7 @@
 					actionMenu.querySelector(
 						'#wc-endpoint #container #meta #action-buttons #playlistVideoWatchedButtonsContainer'
 					),
-					loadWatchedVideosFromLocalStorage().some(
+					(await loadWatchedVideos()).some(
 						(val) => val === videoId
 					),
 					videoId
@@ -948,7 +1056,7 @@
 				markNotAsWatchedButton.id = 'MarkAsNotWatched';
 				markNotAsWatchedButton.addEventListener('click', () => {
 					const videoId = document.URL.match(/[?&]v=([^&]+)/)[1];
-					removeVideoFromLocalStorage(videoId);
+					removeWatchedVideo(videoId);
 				});
 
 				document
@@ -969,7 +1077,7 @@
 				markAsWatchedButton.id = 'MarkAsWatched';
 				markAsWatchedButton.addEventListener('click', () => {
 					const videoId = document.URL.match(/[?&]v=([^&]+)/)[1];
-					saveWatchedVideoToLocalStorage(videoId);
+					addWatchedVideo(videoId);
 				});
 
 				document
@@ -981,7 +1089,7 @@
 				document.querySelectorAll(
 					'#primary:has(#contents) #contents #contents #contents > ytd-playlist-video-renderer #content #meta'
 				)
-			).forEach((actionMenu) => {
+			).forEach(async (actionMenu) => {
 				if (!actionMenu) return;
 
 				if (
@@ -1015,7 +1123,7 @@
 					.getAttribute('href')
 					.match(/[?&]v=([^&]+)/)[1];
 
-				const isWatched = loadWatchedVideosFromLocalStorage().some(
+				const isWatched = (await loadWatchedVideos()).some(
 					(val) => val === videoId
 				);
 
@@ -1111,7 +1219,7 @@
 						button.style = 'font-size: 1.5rem;';
 						button.id = 'MarkAsWatched';
 						button.addEventListener('click', () =>
-							saveWatchedVideoToLocalStorage(video_id)
+							addWatchedVideo(video_id)
 						);
 
 						actionMenu
@@ -1136,7 +1244,7 @@
 						button.style = 'font-size: 1.5rem;';
 						button.id = 'MarkAsNotWatched';
 						button.addEventListener('click', () =>
-							removeVideoFromLocalStorage(video_id)
+							removeWatchedVideo(video_id)
 						);
 
 						actionMenu
@@ -1271,7 +1379,7 @@
 					.querySelector('#below #messages')
 					.appendChild(alreadyWatchedWarning);
 			}
-			saveWatchedVideoToLocalStorage(video_id);
+			addWatchedVideo(video_id);
 		}
 	}
 
