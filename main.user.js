@@ -315,6 +315,19 @@
 
 	// ===========================================================
 
+    function throttle(fn, delay) {
+        let lastTime = 0;
+        return function (...args) {
+            let now = Date.now();
+            if (now - lastTime >= delay) {
+                fn.apply(this, args);
+                lastTime = now;
+            }
+        };
+    }
+
+	// ===========================================================
+
 	const debounce = function (func, wait, immediate) {
 		let timeout;
 		return (...args) => {
@@ -908,12 +921,12 @@
 						};
 					});
 				});
-		
+
 				// Wait for all add operations to complete
 				const results = await Promise.all(addPromises);
 				const addedCount = results.filter(result => result).length;
 				const skippedCount = results.length - addedCount;
-		
+
 				await transaction.done;
                 alert(`${validVideoIDs.length} video(s) successfully loaded into IndexedDB! ${skippedCount} video(s) skipped!`);
                 run();
@@ -1265,19 +1278,13 @@
 		}
 	};
 
-	const run = debounce((mutations) => {
+	const run = throttle((mutations) => {
 		// don't react if only *OUR* own buttons changed state
 		// to avoid running an endless loop
-
-		if (mutations && mutations.length === 1) {
-			return;
-		}
-
-		if (!mutations) return;
-
-		if (
-			mutations[0].target.classList.contains('YT-HWV-BUTTON') ||
-			mutations[0].target.classList.contains('YT-HWV-BUTTON-SHORTS')
+		if (			mutations &&
+			mutations.length === 1 &&
+			(mutations[0].target.classList.contains('YT-HWV-BUTTON') ||
+				mutations[0].target.classList.contains('YT-HWV-BUTTON-SHORTS'))
 		) {
 			return;
 		}
